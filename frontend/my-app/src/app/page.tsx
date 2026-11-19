@@ -17,6 +17,10 @@ import {
   Leaf,
   Unlock,
   Clock,
+  Lightbulb,
+  TriangleAlert,
+  CircleCheck,
+  Info,
 } from "lucide-react";
 
 /* ----------------------------- Types & data ----------------------------- */
@@ -46,7 +50,7 @@ interface PredictionResponse {
 }
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "https://mental-health-model-m5n5.onrender.com/predict";
+  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/predict";
 
 const PLATFORMS = [
   "Instagram",
@@ -190,6 +194,154 @@ function getHabitRows(d: StudentFormData) {
     { name: "Activity", value: `${d.physical_activity_hours} h`, ...activity },
   ];
 }
+
+type AdviceLevel = "high" | "medium" | "good";
+interface Advice {
+  level: AdviceLevel;
+  title: string;
+  text: string;
+}
+
+function getAdvice(d: StudentFormData, score: number): Advice[] {
+  const list: Advice[] = [];
+
+  // Sleep
+  if (d.sleep_hours_per_night < 6) {
+    list.push({
+      level: "high",
+      title: "Protect your sleep",
+      text: `You sleep about ${d.sleep_hours_per_night} hours. Aim for 7 to 9. Fix a bedtime, keep your phone away from the bed and avoid screens for the last 30 minutes of the day.`,
+    });
+  } else if (d.sleep_hours_per_night < 7) {
+    list.push({
+      level: "medium",
+      title: "Add a little more sleep",
+      text: "You are close to the healthy range. Going to bed 30 to 45 minutes earlier can improve mood and focus.",
+    });
+  } else if (d.sleep_hours_per_night > 9) {
+    list.push({
+      level: "medium",
+      title: "Keep a steady sleep schedule",
+      text: "Sleeping much longer than 9 hours can leave you tired. Wake up at the same time every day, including weekends.",
+    });
+  }
+
+  // Screen time
+  if (d.avg_daily_usage_hours > 6) {
+    list.push({
+      level: "high",
+      title: "Cut down screen time",
+      text: `${d.avg_daily_usage_hours} hours a day is high. Try app timers, a screen-free hour after waking up, and replace one scrolling session with a walk or a call with a friend.`,
+    });
+  } else if (d.avg_daily_usage_hours > 3) {
+    list.push({
+      level: "medium",
+      title: "Keep an eye on screen time",
+      text: "Your usage is moderate. Use the 20-20-20 rule: every 20 minutes, look at something 20 feet away for 20 seconds.",
+    });
+  }
+
+  // Unlocks
+  if (d.daily_unlocks > 100) {
+    list.push({
+      level: "high",
+      title: "Reduce phone pickups",
+      text: `${d.daily_unlocks} unlocks a day suggests constant checking. Turn off non-essential notifications and batch your checks into set times.`,
+    });
+  } else if (d.daily_unlocks > 60) {
+    list.push({
+      level: "medium",
+      title: "Check your phone less often",
+      text: "Try leaving your phone in another room while you study. It breaks the habit of reaching for it.",
+    });
+  }
+
+  // Activity
+  if (d.physical_activity_hours < 0.5) {
+    list.push({
+      level: "high",
+      title: "Move your body daily",
+      text: "Start small: a 20 to 30 minute walk, stretching or any sport you enjoy. Regular activity is one of the best natural mood boosters.",
+    });
+  } else if (d.physical_activity_hours < 1) {
+    list.push({
+      level: "medium",
+      title: "Build up your activity",
+      text: "You are on the right track. Aim for around an hour of movement a day, split into short sessions if needed.",
+    });
+  }
+
+  // Stress
+  if (d.stress_level === "High" || d.stress_level === "Very High") {
+    list.push({
+      level: "high",
+      title: "Take stress seriously",
+      text: "Try 5 minutes of slow breathing, short breaks between study blocks, and talk to a friend, family member or campus counselor. You do not have to handle it alone.",
+    });
+  } else if (d.stress_level === "Medium") {
+    list.push({
+      level: "medium",
+      title: "Keep stress in check",
+      text: "Plan your week, break big tasks into small ones and schedule time for things you enjoy.",
+    });
+  }
+
+  // Study load
+  if (d.study_hours > 10) {
+    list.push({
+      level: "medium",
+      title: "Add breaks to long study days",
+      text: "Studying more than 10 hours a day risks burnout. Use focused blocks of 50 minutes followed by 10 minute breaks.",
+    });
+  }
+
+  // Entertainment-heavy usage
+  if (d.purpose_of_use === "Entertainment" && d.avg_daily_usage_hours > 4) {
+    list.push({
+      level: "medium",
+      title: `Balance your ${d.most_used_platform} time`,
+      text: "Much of your screen time is for entertainment. Moving part of it to learning, hobbies or time with people offline can lift your mood.",
+    });
+  }
+
+  const order: Record<AdviceLevel, number> = { high: 0, medium: 1, good: 2 };
+  list.sort((a, b) => order[a.level] - order[b.level]);
+  const top = list.slice(0, 6);
+
+  if (top.length === 0 || score >= 7.5) {
+    top.push({
+      level: "good",
+      title: "Keep up your healthy routine",
+      text: "Your habits look balanced. Stay consistent, keep time for friends and hobbies, and check in with yourself regularly.",
+    });
+  }
+
+  return top.slice(0, 6);
+}
+
+const ADVICE_STYLE: Record<
+  AdviceLevel,
+  { label: string; card: string; badge: string; Icon: typeof Info }
+> = {
+  high: {
+    label: "High priority",
+    card: "border-rose-200 bg-rose-50/60",
+    badge: "bg-rose-100 text-rose-800",
+    Icon: TriangleAlert,
+  },
+  medium: {
+    label: "Worth improving",
+    card: "border-amber-200 bg-amber-50/60",
+    badge: "bg-amber-100 text-amber-800",
+    Icon: Info,
+  },
+  good: {
+    label: "Doing well",
+    card: "border-emerald-200 bg-emerald-50/60",
+    badge: "bg-emerald-100 text-emerald-800",
+    Icon: CircleCheck,
+  },
+};
 
 function extractError(data: unknown): string {
   const fallback = "The prediction request failed. Please try again.";
@@ -417,6 +569,8 @@ function ScoreGauge({ score }: { score: number | null }) {
 export default function MindPulsePage() {
   const [formData, setFormData] = useState<StudentFormData>(INITIAL_DATA);
   const [score, setScore] = useState<number | null>(null);
+  const [submitted, setSubmitted] = useState<StudentFormData | null>(null);
+  const adviceRef = useRef<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
@@ -429,12 +583,14 @@ export default function MindPulsePage() {
   const applyPreset = (name: keyof typeof PRESETS) => {
     setError(null);
     setScore(null);
+    setSubmitted(null);
     setFormData(PRESETS[name]);
   };
 
   const reset = () => {
     setFormData(INITIAL_DATA);
     setScore(null);
+    setSubmitted(null);
     setError(null);
   };
 
@@ -457,6 +613,7 @@ export default function MindPulsePage() {
 
       const data: PredictionResponse = await res.json();
       setScore(data.predicted_mental_health_score);
+      setSubmitted({ ...formData });
 
       // On small screens the result sits below the form, so bring it into view
       if (window.matchMedia("(max-width: 1023px)").matches) {
@@ -471,6 +628,7 @@ export default function MindPulsePage() {
       }
     } catch (err) {
       setScore(null);
+      setSubmitted(null);
       setError(
         err instanceof TypeError
           ? "Could not reach the server. Make sure the FastAPI backend is running."
@@ -489,7 +647,7 @@ export default function MindPulsePage() {
     <div className="min-h-screen w-full overflow-x-hidden bg-[#eef3f2] text-slate-900 antialiased">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 min-[400px]:px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-white">
               <Brain className="h-5 w-5" aria-hidden />
@@ -509,15 +667,15 @@ export default function MindPulsePage() {
             className="flex min-h-[40px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
             <RotateCcw className="h-4 w-4" aria-hidden />
-            Reset
+            <span className="hidden min-[360px]:inline">Reset</span>
           </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 sm:pt-10">
+      <main className="mx-auto max-w-7xl px-3 pb-12 pt-6 min-[400px]:px-4 sm:px-6 sm:pt-10 lg:px-8">
         {/* Intro */}
-        <div className="mb-7 max-w-2xl sm:mb-9">
-          <h1 className="text-balance text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+        <div className="mb-7 max-w-3xl sm:mb-9">
+          <h1 className="text-balance text-2xl font-extrabold leading-tight tracking-tight min-[400px]:text-3xl sm:text-4xl lg:text-5xl">
             See how your daily habits shape your mental wellbeing
           </h1>
           <p className="mt-3 text-base text-slate-600">
@@ -626,6 +784,7 @@ export default function MindPulsePage() {
                 />
               </div>
 
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
               <SliderField
                 id="usage"
                 label="Daily screen time"
@@ -649,6 +808,7 @@ export default function MindPulsePage() {
                 step={5}
                 onChange={(v) => update("daily_unlocks", v)}
               />
+              </div>
             </Card>
 
             <Card
@@ -656,6 +816,7 @@ export default function MindPulsePage() {
               title="Lifestyle and stress"
               subtitle="Study, movement, rest and how you feel"
             >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
               <SliderField
                 id="study"
                 label="Study per day"
@@ -689,6 +850,7 @@ export default function MindPulsePage() {
                 step={0.5}
                 onChange={(v) => update("sleep_hours_per_night", v)}
               />
+              </div>
 
               <Segmented<StressLevel>
                 label="Stress level"
@@ -703,7 +865,7 @@ export default function MindPulsePage() {
             </Card>
 
             {/* Submit: sticks to the bottom on phones so it is always reachable */}
-            <div className="sticky bottom-0 z-20 -mx-4 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+            <div className="sticky bottom-0 z-20 -mx-3 border-t border-slate-200 bg-white/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur min-[400px]:-mx-4 min-[400px]:px-4 sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
               <button
                 type="submit"
                 disabled={loading}
@@ -781,7 +943,7 @@ export default function MindPulsePage() {
                     Your habits at a glance
                   </h3>
                   <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-                    {getHabitRows(formData).map((row) => (
+                    {getHabitRows(submitted ?? formData).map((row) => (
                       <li
                         key={row.name}
                         className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm"
@@ -811,6 +973,71 @@ export default function MindPulsePage() {
             </p>
           </aside>
         </div>
+        {/* Personalized advice */}
+        {score !== null && submitted && !loading && (
+          <section
+            ref={adviceRef}
+            aria-labelledby="advice-title"
+            className="mt-8 scroll-mt-20 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-10 sm:p-6 lg:p-8"
+          >
+            <div className="mb-5 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                <Lightbulb className="h-5 w-5" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <h2 id="advice-title" className="text-lg font-bold sm:text-xl">
+                  Advice for you
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Suggestions based on the details you submitted, most
+                  important first.
+                </p>
+              </div>
+            </div>
+
+            <ul className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {getAdvice(submitted, score).map((tip) => {
+                const st = ADVICE_STYLE[tip.level];
+                return (
+                  <li
+                    key={tip.title}
+                    className={`flex flex-col gap-2 rounded-2xl border p-4 ${st.card}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <st.Icon className="h-5 w-5 shrink-0 text-slate-700" aria-hidden />
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${st.badge}`}
+                      >
+                        {st.label}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      {tip.title}
+                    </h3>
+                    <p className="text-sm leading-relaxed text-slate-600">
+                      {tip.text}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="mt-6 grid grid-cols-1 gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600 sm:grid-cols-3 sm:text-sm">
+              <span className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#0f9d7a]" />
+                7.5 to 10: Healthy and balanced
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#d9922b]" />
+                5 to 7.4: Moderate wellness
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#dc4a3d]" />
+                Below 5: Needs attention
+              </span>
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
